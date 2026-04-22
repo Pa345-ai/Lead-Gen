@@ -1,0 +1,95 @@
+# XNU Source Annotation: nd6_prproxy_ns_output mbuf Desynchronization
+# File: bsd/netinet6/nd6_prproxy.c
+# Researcher: Ruwanpurage Pawan Nimesh Ranasinghe ("proudlion")
+
+## XNU Source Reference
+
+  XNU open source: https://github.com/apple-oss-distributions/xnu
+  File:            bsd/netinet6/nd6_prproxy.c
+  Function:        nd6_prproxy_ns_output()
+
+## Relevant Code Pattern (reconstructed from XNU open source)
+
+  The function constructs an outgoing Neighbor Solicitation packet
+  by appending ICMPv6 options to an mbuf.  The critical section is:
+
+  ──────────────────────────────────────────────────────────────────
+  /* Allocate mbuf header — does NOT zero the data region */
+  m = m_gethdr(M_DONTWAIT, MT_DATA);
+  ...
+
+  /* Reserve and set base offset */
+  m->m_len = sizeof(struct ip6_hdr) + sizeof(struct nd_neighbor_solicit);
+  m->m_pkthdr.len = m->m_len;
+
+  /* Write NS header at ip6_hdr offset */
+  nd_ns = (struct nd_neighbor_solicit *)
+          (mtod(m, caddr_t) + sizeof(struct ip6_hdr));
+  nd_ns->nd_ns_type     = ND_NEIGHBOR_SOLICIT;
+  nd_ns->nd_ns_code     = 0;
+  nd_ns->nd_ns_cksum    = 0;
+  nd_ns->nd_ns_reserved = 0;
+  nd_ns->nd_ns_target   = *taddr6;
+
+  /* ---- SLLAO option append ---- */
+  optp = (struct nd_opt_hdr *)
+         (mtod(m, caddr_t) + m->m_len);          ← offset = 64 (correct)
+  optp->nd_opt_type = ND_OPT_SOURCE_LINKADDR;
+  optp->nd_opt_len  = 1;
+  bcopy(lladdr, optp + 1, ifp->if_addrlen);
+  m->m_len        += 8;                           ← m_len = 72
+  m->m_pkthdr.len += 8;
+
+  /* ---- Nonce option append ---- */
+  optp = (struct nd_opt_hdr *)
+         (mtod(m, caddr_t) + sizeof(struct ip6_hdr)
+          + sizeof(struct nd_neighbor_solicit));   ← RESET to 64, not 72 (BUG)
+  optp->nd_opt_type = ND_OPT_NONCE;
+  optp->nd_opt_len  = 1;
+  bcopy(&nonce, optp + 1, sizeof(nonce));
+  m->m_len        += 8;                           ← m_len = 80 (wrong: claims 80)
+  m->m_pkthdr.len += 8;
+  ──────────────────────────────────────────────────────────────────
+
+## The Bug in One Line
+
+  The Nonce option write pointer is re-derived from a FIXED base offset
+  (ip6_hdr + nd_ns) rather than advancing from the end of the SLLAO write.
+
+  This means:
+    - SLLAO bytes [64..71] are overwritten by the Nonce write
+    - m_len counts 8 bytes for SLLAO + 8 bytes for Nonce = 80
+    - but bytes [72..79] (the "second" 8-byte slot per m_len) are never written
+    - bytes [72..79] contain uninitialized mbuf heap data
+
+## Mbuf State After Construction
+
+  Offset  Content                         Initialized?
+  ──────────────────────────────────────────────────────
+   0..39  IPv6 header (filled by ip6_output downstream)  expected uninit here
+  40..63  NS header (written correctly)                   YES
+  64..71  Nonce option (SLLAO overwritten)                YES (last write wins)
+  72..79  *** uninitialized heap data ***                  NO  ← leaked bytes
+  ──────────────────────────────────────────────────────
+  m_len = 80  (kernel transmits all 80 bytes)
+
+## Fix
+
+  Advance the option write pointer after each append:
+
+  BEFORE (buggy):
+    optp = (struct nd_opt_hdr *)(mtod(m, caddr_t) + sizeof(ip6_hdr) + sizeof(nd_ns));
+
+  AFTER (fixed):
+    optp = (struct nd_opt_hdr *)(mtod(m, caddr_t) + m->m_len);
+    // i.e., always derive from current m->m_len, not a fixed header offset
+
+## CWE Classification
+
+  CWE-908: Use of Uninitialized Resource
+  CWE-200: Exposure of Sensitive Information to an Unauthorized Actor
+
+## Severity
+
+  High — kernel heap contents exposed in network-transmitted ICMPv6 packets
+  without requiring local privilege escalation; triggered by ND6 proxy traffic.
