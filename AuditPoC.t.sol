@@ -69,12 +69,40 @@ contract AuditBase is Test {
         IWalletCore(_alice).initialize();
     }
 
+    // eip712Domain() returns 7 fields:
+    //   (bytes1 fields, string name, string version,
+    //    uint256 chainId, address verifyingContract,
+    //    bytes32 salt, uint256[] extensions)
+    // We need chainId + verifyingContract to reconstruct the separator.
+    bytes32 private constant _DOMAIN_TYPE_HASH =
+        keccak256(
+            "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
+        );
+
+    function _getDomainSeparator(address wallet) internal view returns (bytes32) {
+        // eip712Domain() returns 7 values; 6 commas => 7 slots:
+        // (fields, name, version, chainId, verifyingContract, salt, extensions)
+        //  skip    skip  skip     keep     keep               skip  skip
+        (,,,uint256 chainId, address verifyingContract,,) =
+            WalletCore(payable(wallet)).eip712Domain();
+
+        return keccak256(
+            abi.encode(
+                _DOMAIN_TYPE_HASH,
+                keccak256(bytes(NAME)),
+                keccak256(bytes(VERSION)),
+                chainId,
+                verifyingContract
+            )
+        );
+    }
+
     /// Build a default hookless session signed by Alice
     function _buildSession(
         address executor,
         bytes memory preHook,
         bytes memory postHook
-    ) internal returns (Session memory s) {
+    ) internal view returns (Session memory s) {
         s = Session({
             id:         0,
             executor:   executor,
@@ -178,7 +206,7 @@ contract PoC_F1_HooklessSession is AuditBase {
 contract ReentrantHook is IHook {
     IWalletCore public wallet;
     Call[]      public storedCalls;     // calls saved from first preCheck
-    Session     public storedSession;   // session saved from first preCheck
+    Session     internal storedSession; // session saved from first preCheck
     uint256     public reentryCount;    // track how many times body ran
 
     bool private _entered;
@@ -299,7 +327,7 @@ contract PoC_F2_ReentrancyHook is AuditBase {
 contract PoC_F3_EncodingMismatch is AuditBase {
     /// @notice Shows the exact hash divergence between the contract's
     ///         on-chain encoding and the EIP-712 specification encoding.
-    function test_poc_f3_encoding_mismatch() public view {
+    function test_poc_f3_encoding_mismatch() public {
         // One synthetic call hash (value doesn't matter — any bytes32 will do)
         bytes32[] memory callHashes = new bytes32[](1);
         callHashes[0] = keccak256("dummy");
@@ -378,7 +406,7 @@ contract PoC_F3_EncodingMismatch is AuditBase {
         );
 
         // Retrieve domain separator from the wallet (EIP-712 standard)
-        (, bytes32 domainSeparator,,) = WalletCore(payable(_alice)).eip712Domain();
+        bytes32 domainSeparator = _getDomainSeparator(_alice);
 
         bytes32 specStructHash = keccak256(
             abi.encode(
@@ -477,7 +505,7 @@ contract PoC_F4_IsValidSignatureMismatch is AuditBase {
         // A standard EIP-712 library would instead compute:
         //   "\x19\x01" || domainSeparator || structHash
         // Those are DIFFERENT byte strings for the same "intent".
-        (, bytes32 domainSeparator,,) = WalletCore(payable(_alice)).eip712Domain();
+        bytes32 domainSeparator = _getDomainSeparator(_alice);
         // (no struct type defined for this — any typed struct would differ)
         // The simplest mismatch: domainSeparator vs boundHash are not equal.
         assertFalse(
@@ -554,7 +582,7 @@ contract PoC_F7_RawSigReuse is AuditBase {
     /// @notice Shows that a raw ECDSA signature Alice made in an unrelated
     ///         context (e.g. a simple off-chain message) is accepted by
     ///         isValidSignature with no binding to this wallet or chain.
-    function test_poc_f7_raw_sig_accepted_without_domain_binding() public {
+    function test_poc_f7_raw_sig_accepted_without_domain_binding() public view {
         // ── Simulate Alice signing some arbitrary payload in a prior context.
         // In a real attack this could be an EIP-7702 authorisation hash or
         // a legacy personal_sign message hash.
@@ -584,7 +612,7 @@ contract PoC_F7_RawSigReuse is AuditBase {
         // A correct implementation would wrap the hash:
         //   digest = _hashTypedDataV4(keccak256(abi.encode(SOME_TYPEHASH, priorContextHash)))
         // That digest is DIFFERENT from priorContextHash, so the raw sig fails.
-        (, bytes32 domainSeparator,,) = WalletCore(payable(_alice)).eip712Domain();
+        bytes32 domainSeparator = _getDomainSeparator(_alice);
         bytes32 domainBoundHash = keccak256(
             abi.encodePacked("\x19\x01", domainSeparator, priorContextHash)
         );
