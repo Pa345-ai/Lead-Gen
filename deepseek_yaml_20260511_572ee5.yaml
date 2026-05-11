@@ -1,0 +1,82 @@
+# config/target_config.yaml
+# SecureGraph target configuration
+# Copy this file and customize for your target.
+
+# Target application
+target:
+  name: "Example FastAPI App"
+  base_url: "http://localhost:8000"
+  description: "E-commerce order management API"
+
+# Authentication seeds
+# Provide at least two tokens for different privilege levels
+auth:
+  seed_tokens:
+    user: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyXzEiLCJyb2xlIjoidXNlciJ9.placeholder_user_token"
+    admin: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyXzIiLCJyb2xlIjoiYWRtaW4ifQ.placeholder_admin_token"
+    attacker: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyXzMiLCJyb2xlIjoidXNlciJ9.placeholder_attacker_token"
+  
+  # Self-registration (if target supports it)
+  allow_self_registration: false
+  registration_endpoint: "/auth/register"
+  login_endpoint: "/auth/login"
+  
+  # Auth header customization
+  auth_header_name: "Authorization"  # or "X-API-Key" for API key auth
+
+# Execution safety
+execution:
+  allow_destructive_actions: true   # set false for production
+  max_impact: "high"                # none, low, medium, high, critical
+  step_delay_ms: 500                # delay between exploit steps
+  enable_teardown: true             # clean up created resources
+  request_timeout: 30.0
+
+# Output
+output:
+  dir: "./output"
+  formats:
+    - json
+    - markdown
+    - pdf
+  save_graph: true
+  save_hypotheses: true
+
+# Static analysis
+static_analysis:
+  source_dirs:
+    - "./app"
+  exclude_patterns:
+    - "*/test_*"
+    - "*/migrations/*"
+  frameworks:
+    - fastapi
+
+# Dynamic observation
+dynamic_observer:
+  enabled: false
+  proxy_port: 8080
+  save_interval_sec: 60
+  role_headers:
+    x-role: "role"
+    x-api-key: "api_key"
+
+# LLM ranking (optional)
+llm:
+  enabled: false
+  provider: "anthropic"
+  model: "claude-sonnet-4-20250514"
+  api_key_env: "ANTHROPIC_API_KEY"
+  min_confidence_for_llm: 0.5
+
+# Fingerprint database
+fingerprints:
+  db_path: "./output/fingerprints.db"
+  auto_learn: true
+  min_confidence_to_store: 0.85
+
+# CI/CD integration
+cicd:
+  fail_on: "critical"  # critical, high, medium, low, never
+  max_allowed_findings: 0
+  output_format: "json"

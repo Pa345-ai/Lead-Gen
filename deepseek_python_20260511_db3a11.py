@@ -1,0 +1,33 @@
+# requirements.txt
+# SecureGraph — Enterprise Vulnerability Hunter
+# Core dependencies
+
+# Static analysis
+tree-sitter>=0.20.0
+tree-sitter-python>=0.20.0
+tree-sitter-javascript>=0.20.0
+
+# HTTP engine
+httpx>=0.25.0
+aiohttp>=3.9.0
+
+# Dynamic observation
+mitmproxy>=10.0.0
+
+# Graph & data
+sqlalchemy>=2.0.0
+aiosqlite>=0.19.0
+
+# Reporting
+reportlab>=4.0.0
+jinja2>=3.1.0
+
+# Config
+pyyaml>=6.0
+
+# CLI
+typer>=0.9.0
+rich>=13.0.0
+
+# Utilities
+python-dateutil>=2.8.0
