@@ -1,4 +1,4 @@
-# Public endpoints that should NOT trigger MissingAuthentication
+# Public endpoints that should NOT trigger MissingAuthentication (writes)
 public_write_endpoints:
   - /token
   - /register
@@ -9,3 +9,15 @@ public_write_endpoints:
   - /webhook          # often public by design
   - /healthcheck
   - /debug
+
+# Public endpoints that should NOT trigger UnauthenticatedObjectRead / UnauthenticatedRead
+public_read_endpoints:
+  - /health
+  - /healthcheck
+  - /debug
+  - /metrics
+  - /docs
+  - /openapi.json
+  - /favicon.ico
+  - /robots.txt
+  - /version
