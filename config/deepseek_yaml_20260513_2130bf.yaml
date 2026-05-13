@@ -1,0 +1,11 @@
+# Public endpoints that should NOT trigger MissingAuthentication
+public_write_endpoints:
+  - /token
+  - /register
+  - /reset-password
+  - /reset-password/new-password
+  - /login
+  - /signup
+  - /webhook          # often public by design
+  - /healthcheck
+  - /debug
