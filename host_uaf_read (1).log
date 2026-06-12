@@ -1,0 +1,10 @@
+[+] BPF program loaded
+[+] Attached to socket
+[*] Triggering UAF with reuse...
+[*] Leaked byte (key=0): 0x51
+[*] val1 content (key=1): 0xbbbbbbbbbbbbbbbb
+[*] new_val content (key=2): 0x5151515151515151
+
+=== VERDICT ===
+[+] CONFIRMED: Stale slice read the reallocated object (0x51).
+    Freed slab was reclaimed by key=2, proving dangling pointer UAF.
