@@ -118,7 +118,7 @@ public class POC1_RaceCondition_FIXED {
                  os.write(VOTE_DATA, 0, 20);
                  System.out.println("[WRITE THREAD] Wrote 20 bytes of vote data");
                  
-                 Thread.sleep(50);
+                 try { Thread.sleep(50); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); throw new IOException(ie); }
                  
                  System.out.println("[WRITE THREAD] EXCEPTION: Simulated encryption failure!");
                  throw new IOException("Encryption failed: Invalid vote format");
@@ -165,12 +165,12 @@ public class POC1_RaceCondition_FIXED {
                  os.write(VALID_ENCRYPTED_VOTE, 0, 100);
                  System.out.println("[ENCRYPT] Wrote chunk 1: 100 bytes");
                  
-                 Thread.sleep(20);
+                 try { Thread.sleep(20); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); throw new IOException(ie); }
                  
                  os.write(VALID_ENCRYPTED_VOTE, 100, 100);
                  System.out.println("[ENCRYPT] Wrote chunk 2: 100 bytes");
                  
-                 Thread.sleep(20);
+                 try { Thread.sleep(20); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); throw new IOException(ie); }
                  
                  System.out.println("[ENCRYPT] ERROR: Encryption key validation failed!");
                  throw new RuntimeException("Key derivation failed - corrupted ballot");
